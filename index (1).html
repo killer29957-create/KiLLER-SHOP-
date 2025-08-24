@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+<meta charset="UTF-8">
+<title>KiLLER SHOP</title>
+<style>
+body { font-family: Tahoma; direction: rtl; background:#111; color:#fff; margin:0; }
+header { background: rgba(0,0,0,0.85); padding:15px; display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #0f0; }
+.logo { font-size:22px; color:#0f0; font-weight:bold; }
+.nav-buttons { display:flex; gap:8px; flex-wrap:wrap; }
+.hidden { display:none; }
+.page { display:none; padding:20px; max-width:500px; margin:20px auto; background:#222; border-radius:10px; }
+input, select { width:100%; padding:8px; margin:5px 0; border-radius:6px; border:none; background:#333; color:#fff; }
+button { padding:8px 16px; border:none; border-radius:6px; background:#0f0; color:#000; cursor:pointer; }
+button:hover { background:#0c0; }
+#notification { position: fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#0f0; color:#000; padding:10px 20px; border-radius:8px; display:none; font-weight:bold; z-index:9999; text-align:center; }
+.log-item { margin-bottom:10px; border-bottom:1px solid #333; padding-bottom:5px; }
+.balance-box { background:#000; padding:10px; margin-bottom:10px; border-radius:10px; color:#0f0; font-weight:bold; text-align:center; }
+</style>
+</head>
+<body>
+<div id="notification"></div>
+<header>
+<div class="logo">💰 KiLLER SHOP</div>
+<div class="nav-buttons hidden" id="navButtons">
+<button onclick="showPage('shopPage')">شحن</button>
+<button onclick="showPage('depositPage')">إيداع</button>
+<button onclick="showPage('adminPage')">قسم المدير</button>
+<button onclick="showPage('logPage')">السجل</button>
+<button onclick="logout()">تسجيل خروج</button>
+</div>
+</header>
+
+<div class="page" id="loginPage">
+<h2>تسجيل الدخول</h2>
+<input type="email" id="email" placeholder="البريد الإلكتروني"><br>
+<input type="password" id="password" placeholder="كلمة المرور"><br>
+<button id="loginBtn">تسجيل الدخول</button>
+<p>لا تملك حساب؟ <a href="#" id="toSignup">إنشاء حساب</a></p>
+</div>
+
+<div class="page" id="signupPage">
+<h2>إنشاء حساب</h2>
+<input type="text" id="signupName" placeholder="الاسم"><br>
+<input type="email" id="signupEmail" placeholder="البريد الإلكتروني"><br>
+<input type="password" id="signupPassword" placeholder="كلمة المرور"><br>
+<button id="signupBtn">تسجيل</button>
+<p>لديك حساب؟ <a href="#" id="toLogin">تسجيل الدخول</a></p>
+</div>
+
+<div class="page" id="shopPage">
+<h2>شراء جواهر وعضويات</h2>
+<form id="purchaseForm">
+<select id="package"></select>
+<input type="text" id="playerID" placeholder="ID اللاعب"><br>
+<button type="submit">إرسال طلب شراء</button>
+</form>
+</div>
+
+<div class="page" id="depositPage">
+<h2>إيداع رصيد</h2>
+<label>طريقة الدفع: سيرياتيل كاش</label>
+<div><span id="cashNumber">96617866</span> <button onclick="copyCash()">نسخ الرقم</button></div>
+<form id="depositForm">
+<input type="number" id="amount" placeholder="أدخل المبلغ $" step="0.01"><br>
+<div>💵 سيرياتيل كاش: <span id="dollarSyria">11500</span> ل.س</div>
+<input type="text" id="depositorID" placeholder="ID اللاعب"><br>
+<input type="text" id="transactionID" placeholder="رقم العملية"><br>
+<button type="submit">إرسال طلب إيداع</button>
+</form>
+</div>
+
+<div class="page" id="adminPage">
+<h2>⚙️ قسم المدير</h2>
+<h3>طلبات الشحن والإيداع المعلقة</h3>
+<div id="pendingOrders"></div>
+<h3>تعديل سعر الدولار</h3>
+<input type="number" id="newRate"><button onclick="changeRate()">حفظ</button>
+<h3>تعديل أسعار الجواهر والعضويات</h3>
+<div id="packagesEdit"></div>
+</div>
+
+<div class="page" id="logPage">
+<div class="balance-box">رصيدي الحالي: <span id="balance"></span></div>
+<h2>سجل العمليات</h2>
+<div id="log"></div>
+</div>
+
+<script>
+let users = JSON.parse(localStorage.getItem('users')) || {};
+let currentUser = JSON.parse(localStorage.getItem('currentUser')) || null;
+let pendingOrders = JSON.parse(localStorage.getItem('pendingOrders')) || [];
+let settings = JSON.parse(localStorage.getItem('settings')) || {dollarRate:11500, packages:[
+{name:'100 جوهرة', price:1},{name:'200 جوهرة', price:2},{name:'300 جوهرة', price:3},{name:'عضوية أسبوعية', price:2},{name:'عضوية شهرية', price:10}]
+};
+
+function showNotification(msg){
+    let n=document.getElementById('notification');
+    n.innerText=msg; n.style.display='block';
+    setTimeout(()=>{n.style.display='none';},2000);
+}
+
+function showPage(id){
+    document.querySelectorAll('.page').forEach(p=>p.style.display='none');
+    if(id==='adminPage' && (!currentUser||currentUser.email!=='killer29957@gmail.com')) return;
+    document.getElementById(id).style.display='block';
+    renderLog(); renderPending(); updateBalance();
+}
+
+function logout(){
+    currentUser=null; localStorage.removeItem('currentUser'); 
+    document.getElementById('navButtons').classList.add('hidden'); 
+    showPage('loginPage');
+}
+
+function copyCash(){
+    navigator.clipboard.writeText(document.getElementById('cashNumber').innerText); 
+    showNotification('تم النسخ');
+}
+
+function updateBalance(){
+    if(currentUser){
+        let balanceLS = users[currentUser.email].balance || 0;
+        let balanceUSD = (balanceLS / settings.dollarRate).toFixed(2);
+        document.getElementById('balance').innerText=`${balanceLS} ل.س (${balanceUSD} $)`;
+    }
+}
+
+function renderPackages(){
+    const sel=document.getElementById('package'); sel.innerHTML='';
+    settings.packages.forEach(p=>{
+        let priceLS = p.price * settings.dollarRate;
+        let o=document.createElement('option'); 
+        o.value=p.name; 
+        o.dataset.price=p.price;
+        o.textContent=`${p.name} - $${p.price} (${priceLS} ل.س)`; 
+        sel.appendChild(o);
+    });
+}
+
+function renderPackagesEdit(){
+    if(!currentUser||currentUser.email!=='killer29957@gmail.com') return;
+    let c=document.getElementById('packagesEdit'); c.innerHTML='';
+    settings.packages.forEach((p,i)=>{
+        let priceLS = p.price * settings.dollarRate;
+        let d=document.createElement('div');
+        d.innerHTML=`${p.name}: $<input type='number' value='${p.price}' id='pkg_${i}' style='width:50px'> (${priceLS} ل.س) <button onclick='savePackage(${i})'>حفظ</button>`;
+        c.appendChild(d);
+    });
+}
+
+function savePackage(i){
+    let val=parseFloat(document.getElementById(`pkg_${i}`).value); if(isNaN(val)) return;
+    settings.packages[i].price=val;
+    localStorage.setItem('settings',JSON.stringify(settings));
+    renderPackages(); renderPackagesEdit();
+    showNotification(`تم تعديل ${settings.packages[i].name} إلى $${val}`);
+}
+
+function changeRate(){
+    let r=parseFloat(document.getElementById('newRate').value); if(isNaN(r)) return;
+    settings.dollarRate=r; localStorage.setItem('settings',JSON.stringify(settings));
+    showNotification(`تم تعديل سعر الدولار إلى ${r}`);
+    updateDepositDisplay(); updateBalance(); renderPackages(); renderPackagesEdit();
+}
+
+function getSyriaCash(amount){return amount*settings.dollarRate;}
+
+function updateDepositDisplay(){
+    let amt=parseFloat(document.getElementById('amount').value)||0;
+    document.getElementById('dollarSyria').innerText=getSyriaCash(amt);
+}
+
+// سجل العمليات
+function renderLog(){
+    if(!currentUser) return;
+    let logDiv=document.getElementById('log'); logDiv.innerHTML='';
+    let logs=users[currentUser.email].log||[];
+    let balanceLS = users[currentUser.email].balance || 0;
+    let balanceUSD = (balanceLS / settings.dollarRate).toFixed(2);
+    document.getElementById('balance').innerText=`${balanceLS} ل.س (${balanceUSD} $)`;
+    logs.forEach(l=>{
+        let d=document.createElement('div'); d.className='log-item';
+        let amountUSD = (l.amount / settings.dollarRate).toFixed(2);
+        d.textContent=`${l.date} - ${l.type}: ${l.amount} ل.س (${amountUSD} $) (${l.details})`;
+        logDiv.appendChild(d);
+    });
+}
+
+// الطلبات المعلقة
+function renderPending(){
+    if(!currentUser||currentUser.email!=='killer29957@gmail.com') return;
+    let div=document.getElementById('pendingOrders'); div.innerHTML='';
+    pendingOrders.forEach((o,i)=>{
+        let d=document.createElement('div'); 
+        d.style.border='1px solid #0f0'; d.style.margin='5px'; d.style.padding='5px';
+        d.innerHTML=`${o.type} - ${o.user} - ${o.amount} ل.س (${o.details}) 
+        <button onclick="approveOrder(${i})">موافقة</button> 
+        <button onclick="rejectOrder(${i})">رفض</button>`;
+        div.appendChild(d);
+    });
+}
+
+// الموافقة على الطلب
+function approveOrder(i){
+    let o=pendingOrders[i];
+    if(!users[o.user].balance) users[o.user].balance=0;
+    if(o.type==='إيداع') users[o.user].balance+=o.amount;
+    if(o.type==='شراء') users[o.user].balance-=o.amount;
+    if(!users[o.user].log) users[o.user].log=[];
+    users[o.user].log.push({date:new Date().toLocaleString(), type:o.type, amount:o.amount, details:o.details});
+    localStorage.setItem('users',JSON.stringify(users));
+    pendingOrders.splice(i,1); localStorage.setItem('pendingOrders',JSON.stringify(pendingOrders));
+    renderPending(); renderLog(); updateBalance(); showNotification('تمت الموافقة');
+}
+
+function rejectOrder(i){
+    pendingOrders.splice(i,1); localStorage.setItem('pendingOrders',JSON.stringify(pendingOrders));
+    renderPending(); showNotification('تم الرفض');
+}
+
+// Signup and Login
+document.getElementById('signupBtn').addEventListener('click',()=>{
+    let name=document.getElementById('signupName').value.trim();
+    let email=document.getElementById('signupEmail').value.trim();
+    let pass=document.getElementById('signupPassword').value.trim();
+    if(!name||!email||!pass){showNotification('أدخل جميع الحقول'); return;}
+    if(users[email]){showNotification('البريد مستخدم بالفعل'); return;}
+    users[email]={name:name,password:pass,balance:0,log:[]}; localStorage.setItem('users',JSON.stringify(users));
+    showNotification('تم إنشاء الحساب'); showPage('loginPage');
+});
+
+document.getElementById('loginBtn').addEventListener('click',()=>{
+    let email=document.getElementById('email').value.trim();
+    let pass=document.getElementById('password').value.trim();
+    if(!users[email] || users[email].password!==pass){showNotification('البريد أو كلمة المرور خاطئة'); return;}
+    currentUser={email:email}; localStorage.setItem('currentUser',JSON.stringify(currentUser));
+    document.getElementById('navButtons').classList.remove('hidden'); updateBalance(); renderPackages(); renderPackagesEdit(); showPage('shopPage');
+});
+
+document.getElementById('toSignup').addEventListener('click',(e)=>{e.preventDefault(); showPage('signupPage');});
+document.getElementById('toLogin').addEventListener('click',(e)=>{e.preventDefault(); showPage('loginPage');});
+
+// الشراء مع التحقق من الرصيد
+document.getElementById('purchaseForm').addEventListener('submit',(e)=>{
+    e.preventDefault();
+    if(!currentUser) return;
+    let pkg=document.getElementById('package').value;
+    let price=parseFloat(document.getElementById('package').selectedOptions[0].dataset.price)*settings.dollarRate;
+    let playerID=document.getElementById('playerID').value.trim();
+    let userBalance = users[currentUser.email].balance || 0;
+    if(!playerID){showNotification('أدخل ID اللاعب'); return;}
+    if(price > userBalance){showNotification('الرصيد غير كافٍ للشحن'); return;}
+    pendingOrders.push({type:'شراء',user:currentUser.email,amount:price,details:`${pkg} - ID ${playerID}`});
+    localStorage.setItem('pendingOrders',JSON.stringify(pendingOrders)); renderPending(); showNotification('تم إرسال طلب الشراء للموافقة');
+});
+
+// الإيداع
+document.getElementById('depositForm').addEventListener('submit',(e)=>{
+    e.preventDefault();
+    if(!currentUser) return;
+    let amt=parseFloat(document.getElementById('amount').value)||0;
+    let playerID=document.getElementById('depositorID').value.trim();
+    let txn=document.getElementById('transactionID').value.trim();
+    if(!playerID || !txn || amt<=0){showNotification('أكمل جميع الحقول'); return;}
+    pendingOrders.push({type:'إيداع',user:currentUser.email,amount:getSyriaCash(amt),details:`ID ${playerID} - TX ${txn}`});
+    localStorage.setItem('pendingOrders',JSON.stringify(pendingOrders)); renderPending(); showNotification('تم إرسال طلب الإيداع للموافقة');
+});
+
+// Initialize
+document.addEventListener('DOMContentLoaded',()=>{
+    if(currentUser){
+        document.getElementById('navButtons').classList.remove('hidden'); 
+        updateBalance(); renderPackages(); renderPackagesEdit(); showPage('shopPage');
+    } else {showPage('loginPage');}
+});
+
+// تحديث العرض عند تغيير المبلغ في الإيداع
+document.getElementById('amount').addEventListener('input', updateDepositDisplay);
+</script>
+</body>
+</html>
